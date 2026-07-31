@@ -110,7 +110,7 @@ AVAILABLE_FEATURES = [
 # Subset actually computed - edit this list to enable/disable extractors
 # without touching any code.
 FEATURES_TO_EXTRACT = [
-    "band_power",
+   # "band_power",
     "hjorth",
     "differential_entropy",
     "differential_asymmetry",
