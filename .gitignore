@@ -1,0 +1,12 @@
+# Data (raw inputs and extracted outputs - not committed)
+data/input/
+data/output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Logs
+logs/
+src/logs/

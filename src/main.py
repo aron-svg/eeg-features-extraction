@@ -1,91 +1,72 @@
+import glob
 import os
+import sys
 
-import pylsl.examples
+import numpy as np
+
 from logger_init import logger
-import json
-import csv
-from datetime import datetime
-import pylsl
-from pylsl import StreamInlet
+from config import DATA_INPUT_DIR, DATA_OUTPUT_DIR
+from features_tools.feature_extraction import extract_features
 
 
-import random
-import time
-from threading import Thread
-from flask import Flask
-from dash import Dash, html, dcc, Output, Input
+def check_input_files(input_dir):
+    """
+    Check if the input directory contains any files.
+    If not, log an error and exit the program.
+    """
+    if not os.path.exists(input_dir):
+        logger.error(f"Input directory {input_dir} does not exist.")
+        sys.exit(1)
 
-# Simulate hardware device with random data
-class SimulatedHardware:
-    def __init__(self):
-        self.data = 0
-        self.running = True
-
-    def read_data(self):
-        """Simulate reading data from hardware."""
-        self.data = random.randint(0, 100)
-
-    def stop(self):
-        self.running = False
+    if not os.listdir(input_dir):
+        logger.error(f"No input files found in {input_dir}. Please add files to process.")
+        sys.exit(1)
+    else:
+        logger.info(f"Found {len(os.listdir(input_dir))} input files in {input_dir}.")
 
 
-# Flask server for Dash
-server = Flask(__name__)
+def find_subject_files(subject_dir):
+    """
+    Locate the preprocessed .fif recording and events.csv for one subject
+    subfolder (e.g. data/input/HZO024/).
+    """
+    fif_files = glob.glob(os.path.join(subject_dir, "*.fif"))
+    if not fif_files:
+        raise FileNotFoundError(f"No .fif file found in {subject_dir}")
 
-# Dash App
-app = Dash(__name__, server=server)
-app.title = "Hardware Data Viewer"
+    events_csv_path = os.path.join(subject_dir, "events.csv")
+    if not os.path.exists(events_csv_path):
+        raise FileNotFoundError(f"No events.csv found in {subject_dir}")
 
-# Layout of the Dash web app
-app.layout = html.Div([
-    html.H1("Hardware Data Viewer", style={"textAlign": "center"}),
-    html.Div(id="hardware-output", style={"fontSize": "24px", "textAlign": "center"}),
-    dcc.Interval(id="update-interval", interval=1000, n_intervals=0),  # Update every second
-])
-
-
-# Simulated hardware instance
-hardware = SimulatedHardware()
+    return fif_files[0], events_csv_path
 
 
-# Background thread to simulate hardware updates
-def hardware_thread():
-    while hardware.running:
-        hardware.read_data()
-        time.sleep(1)  # Simulate hardware data update interval
+def save_subject_features(subject_id, X, y, metadata):
+    """
+    Save one subject's extracted (X, y, metadata) to a single .npz in
+    DATA_OUTPUT_DIR.
+    """
+    if not os.path.exists(DATA_OUTPUT_DIR):
+        os.makedirs(DATA_OUTPUT_DIR)
+        logger.info(f"Created output directory {DATA_OUTPUT_DIR}.")
+
+    out_path = os.path.join(DATA_OUTPUT_DIR, f"{subject_id}_features.npz")
+    np.savez(out_path, X=X, y=y, **metadata)
+    logger.info(
+        f"Saved {X.shape[0]} windows ({X.shape[1]} features each) to {out_path}."
+    )
 
 
-# Start hardware simulation thread
-hardware_thread = Thread(target=hardware_thread)
-hardware_thread.start()
-
-
-# Callback to update the displayed hardware data
-@app.callback(
-    Output("hardware-output", "children"),
-    Input("update-interval", "n_intervals")
-)
-def update_hardware_output(n_intervals):
-    return f"Hardware Data: {hardware.data}"
-
-
-# Run the app
 if __name__ == "__main__":
-    try:
-        app.run_server(debug=True)
-    finally:
-        hardware.stop()
-        hardware_thread.join()
+    logger.info("Starting the main process")
+    check_input_files(DATA_INPUT_DIR)
 
+    for subject_id in sorted(os.listdir(DATA_INPUT_DIR)):
+        subject_dir = os.path.join(DATA_INPUT_DIR, subject_id)
+        if not os.path.isdir(subject_dir):
+            continue
 
-# if __name__ == "__main__":
-#     logger.info("Starting the main process")
-    
-#     print("hello world")
-    
-#     pylsl.examples
-#     StreamInlet.open_stream('type', 'EEG')
-    
-#     StreamInlet.close_stream('type', 'EEG')
-#     pylsl.resolve_stream('type', 'EEG')
-    
+        fif_path, events_csv_path = find_subject_files(subject_dir)
+        logger.info(f"Extracting features for subject {subject_id}")
+        X, y, metadata = extract_features(fif_path, events_csv_path)
+        save_subject_features(subject_id, X, y, metadata)
