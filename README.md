@@ -1,208 +1,117 @@
-# Python Development Template
+# EEG Features Extraction
 
-A comprehensive Python template for beginning new development projects with pre-configured tools and environment setup.
+Extraction pipeline that turns preprocessed EEG recordings (MNE `.fif`) into ML-ready feature arrays for predicting **valence / arousal / dominance (VAD)**.
 
-## 🚀 Quick Start
+## What it does
 
-This template provides everything you need to start a new Python project quickly and efficiently.
+For each subject folder in `data/input/`, the pipeline:
 
-### Prerequisites
-- Python 3.x installed on your system
-- Git and Git LFS installed
+1. Loads the preprocessed `.fif` recording and matches its `stimulus` annotations to the corresponding rows in `events.csv` (by nearest onset, within a configurable tolerance) to recover the valence/arousal/dominance rating of each trial.
+2. Slides a fixed-length window (default 4s, step 2s) across each labeled trial.
+3. Extracts a configurable set of EEG (and optionally peripheral) features per window.
+4. Saves one `.npz` per subject in `data/output/` containing `X` (features), `y` (VAD labels), and per-window metadata.
 
-### Setup Environment
+## Project structure
 
-Choose the appropriate initialization script for your operating system:
+```
+src/
+├── config.py                    # All pipeline parameters (paths, window size, feature catalog...)
+├── main.py                      # Entry point: loops over data/input/<subject>/, extracts, saves .npz
+├── features_tools/
+│   ├── epoching.py              # Matches .fif annotations <-> events.csv rows, builds sliding windows
+│   └── feature_extraction.py    # All feature extractors + dispatch
+├── logger_init.py / logging_config.py
+scripts/
+└── inspect_features.py          # Standalone viewer for the *_features.npz files (no pipeline import)
+data/
+├── input/<subject_id>/          # preprocessed_*.fif + events.csv (gitignored)
+└── output/<subject_id>_features.npz  # (gitignored)
+```
 
-#### Windows, Linux/macOS
+## Expected input layout
+
+Each subject is a subfolder of `data/input/`:
+
+```
+data/input/HZO024/
+├── preprocessed_data_v3_HZO024.fif   # required - the preprocessed EEG recording
+└── events.csv                        # required - one "stimulus" row per labeled trial,
+                                       # with valence/arousal/dominance columns
+```
+
+Other files that may be present alongside these (e.g. `HAPI.json`, `PL_GAZE*.json`) are not used by this pipeline - the LSL sync they provide is already reflected in the `.fif` annotation onsets.
+
+## Running it
+
+```bash
+uv sync
+uv run python src/main.py
+```
+
+This processes every subject subfolder found in `DATA_INPUT_DIR` and writes `data/output/<subject_id>_features.npz`.
+
+## Configuration (`src/config.py`)
+
+All parameters are centralized here - nothing else needs to be touched to change behavior:
+
+| Setting | Purpose |
+|---|---|
+| `WINDOW_LENGTH_SEC` / `WINDOW_STEP_SEC` | Sliding window size/step within each labeled trial (default 4s / 2s) |
+| `ONSET_MATCH_TOLERANCE_SEC` | Max allowed gap when pairing a `.fif` annotation to its `events.csv` row |
+| `EEG_CHANNEL_TYPES` | Channel types used by the EEG-specific extractors |
+| `PERIPHERAL_CHANNEL_TYPES` / `EXCLUDED_CHANNEL_NAMES` | Non-EEG channels included (ECG/EOG/misc), with non-signal channels (e.g. `timestamp`) dropped by name |
+| `ASYMMETRIC_CHANNEL_PAIRS` | Left/right electrode pairs used by the hemispheric asymmetry extractors |
+| `FREQUENCY_BANDS` / `BAND_RATIOS` | EEG frequency bands and named band-power ratios |
+| `AVAILABLE_FEATURES` | Catalog of implemented extractors |
+| `FEATURES_TO_EXTRACT` | Subset actually computed - edit this list to enable/disable features without touching any code |
+
+### Feature catalog
+
+| Feature | Channels | Description |
+|---|---|---|
+| `band_power` | EEG | Welch PSD integrated per frequency band |
+| `hjorth` | EEG | Mobility + complexity per channel |
+| `differential_entropy` | EEG | `0.5*log(2*pi*e*power)` per band - Gaussian approximation, standard in EEG-emotion literature (SEED/DEAP) |
+| `differential_asymmetry` | EEG | DE(left) - DE(right) per hemispheric pair/band (DASM) |
+| `rational_asymmetry` | EEG | DE(left) / DE(right) per hemispheric pair/band (RASM) |
+| `band_ratios` | EEG | Named ratios between band powers (e.g. beta/alpha "engagement index") |
+| `spectral_entropy` | EEG | Shannon entropy of the normalized PSD, bounded to [0, 1] |
+| `peripheral_stats` | ECG / EOG / temp / resp / GSR | Mean, std, min, max, slope per channel |
+
+## Output format
+
+One `.npz` per subject, loadable with `np.load(path, allow_pickle=True)`:
+
+- `X`: `(n_windows, n_features)` - feature matrix
+- `y`: `(n_windows, 3)` - valence/arousal/dominance, constant across all windows of the same trial
+- `subject_id`, `trial_index`, `window_start`, `window_end`, `media_filename`: per-window metadata
+
+Windows overlap within a trial (they are not independent samples) - group any train/test split by `trial_index` (and `subject_id`, once multiple subjects are combined) to avoid data leakage.
+
+## Inspecting a result
+
+```bash
+uv run python scripts/inspect_features.py data/output/HZO024_features.npz [--show]
+```
+
+Prints a text summary (shapes, VAD ranges, windows per trial) and saves a 4-panel overview figure next to the input file: standardized feature heatmap, PCA projection colored by stimulus emotion category, valence/arousal plane, and windows-per-trial distribution.
+
+## Setup
+
 ```bash
 uv sync
 ```
 
-These scripts will:
-- Create a Python virtual environment (`venv`)
-- Install all required packages from `pyproject.toml`
-- Set up the development environment
+Installs Python, `mne`, `numpy`, `scipy`, `matplotlib`, and dev tooling (`black`/`flake8`) from `pyproject.toml`.
 
-## 📁 Project Structure
-
-```
-Template_OrigenesRD/
-├── src/                    # Source code directory
-│   ├── main.py            # Main application entry point
-│   ├── logger_config.yaml # Logging configuration
-│   ├── logger_init.py     # Logger initialization
-│   └── logging_config.py  # Logging setup
-├── data/                  # Image/Video/CSV assets (tracked by Git LFS)
-├── .vscode/               # VS Code configuration
-│   └── launch.json        # Debug configuration
-├── requirements.txt       # Python dependencies
-├── pyproject.toml         # Project configuration
-├── .gitignore             # Git ignore rules
-├── .gitattributes         # Git LFS configuration
-└── .flake8                # Code linting configuration
-```
-
-## 📦 Included Dependencies
-
-The template comes with these pre-configured packages:
-
-- **requests** (~2.28.1) - HTTP library
-- **pandas** (2.1.1) - Data manipulation and analysis
-- **python-dotenv** (0.20.0) - Environment variable management
-- **numpy** (1.26.0) - Numerical computing
-- **git-lfs** (3.6.1) - Git Large File Storage
-- **flake8** - Code linting
-- **black** - Code formatting
-- **pyyaml** - YAML parsing
-
-## 🛠️ Development Tools
-
-### Code Quality
-- **Flake8**: Configured for code linting with custom rules
-- **Black**: Code formatting (configured in pyproject.toml)
-- **VS Code**: Debug configuration included
-
-### Logging
-- Pre-configured logging system with YAML configuration
-- Structured logging setup for development and production
-
-## 🗂️ Git LFS Configuration
-
-This repository uses Git LFS (Large File Storage) for managing large files efficiently.
-
-### What is Git LFS?
-Git LFS replaces large files with text pointers inside Git, while storing the actual file contents on a remote server like GitHub LFS.
-
-### Configured File Types
-The following file types are automatically tracked by Git LFS:
-
-#### Archives
-- `.zip`, `.tar.gz`, `.7z`, `.rar`
-
-#### Media Files
-- **Video**: `.mp4`, `.avi`, `.mov`, `.mkv`
-- **Audio**: `.mp3`, `.wav`, `.flac`
-- **Images**: `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.tiff`, `.svg`, `.ico`
-
-#### Data Files
-- `.csv`, `.json`, `.xml`, `.sql`
-- **Databases**: `.db`, `.sqlite`, `.sqlite3`
-
-#### Machine Learning
-- **Models**: `.pkl`, `.pickle`, `.h5`, `.hdf5`, `.pt`, `.pth`, `.onnx`, `.pb`, `.tflite`, `.joblib`
-- **Data**: `.npy`, `.npz`
-
-#### Documents
-- `.pdf`, `.doc`, `.docx`, `.ppt`, `.pptx`, `.xls`, `.xlsx`
-
-#### Binaries
-- `.exe`, `.dll`, `.so`, `.dylib`
-
-### Git LFS Commands
+## Docker
 
 ```bash
-# Check LFS status
-git lfs status
-
-# List tracked files
-git lfs ls-files
-
-# Track additional file types
-git lfs track "*.extension"
-
-# Migrate existing files to LFS
-git lfs migrate import --include="*.extension"
-
-# Pull LFS files
-git lfs pull
-
-# Push LFS files
-git lfs push origin main
-```
-
-## 🔧 Usage
-
-1. **Clone this template**:
-   ```bash
-   git clone <repository-url>
-   cd Template_OrigenesRD
-   code . # TO OPEN VSCODE
-   ```
-
-2. **Initialize the environment**:
-   - Windows: `init.bat`
-   - Linux/macOS: `./init.sh`
-
-3. **Activate the virtual environment**:
-   - Windows: `venv\Scripts\activate`
-   - Linux/macOS: `source venv/bin/activate`
-
-4. **Start developing**:
-   ```bash
-   python src/main.py
-   ```
-
-## 🖥️ VS Code Integration
-
-The template includes VS Code configuration for:
-- Python debugging (launch.json)
-- Code formatting and linting settings
-- Integrated terminal support
-
-## 📝 Git LFS Notes
-
-1. **First time setup**: Git LFS is already initialized in this repository
-2. **Automatic tracking**: New files matching the configured patterns will automatically use LFS
-3. **Collaboration**: Team members need to have Git LFS installed and run `git lfs install` in their local repos
-
-## 🔍 Troubleshooting
-
-### Environment Issues
-- Ensure Python 3.x is installed
-- Check that pip is up to date
-- Verify virtual environment activation
-
-### Git LFS Issues
-If you encounter issues:
-1. Ensure Git LFS is installed: `git lfs version`
-2. Verify LFS is initialized: `git lfs install`
-3. Check tracking patterns: `git lfs track`
-4. Verify file status: `git lfs status`
-
-## 🐳 Docker Support
-
-Simple Docker setup for easy containerized development and deployment.
-
-### Quick Start
-
-```bash
-# Build and run with Docker Compose
 docker-compose up
-
-# Or build manually
-docker build -t template-origenesrd .
-docker run -p 8050:8050 template-origenesrd
 ```
 
-### What's Included
+Builds the image and runs `python src/main.py` against the `data/` folder mounted from the host.
 
-- **Dockerfile**: Simple single-stage build
-- **docker-compose.yml**: Basic orchestration
-- **.dockerignore**: Essential exclusions
+## Git
 
-The container runs your app on port 8050 with live code reloading enabled for development.
-
-## 🤝 Contributing
-
-When contributing to projects based on this template:
-1. Follow the established code style (enforced by flake8 and black)
-2. Update pyproject.toml for new dependencies
-3. Use meaningful commit messages
-4. Large files will automatically be handled by Git LFS
-5. Test Docker builds before submitting PRs
-
----
-
-**Ready to develop!** This template provides a solid foundation for Python projects with modern development practices, tools, and containerization pre-configured.
-
+`data/input/`, `data/output/`, `__pycache__/`, `.venv/`, and `logs/` are gitignored - raw recordings and extracted feature arrays are never committed.
