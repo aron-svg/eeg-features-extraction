@@ -68,5 +68,5 @@ if __name__ == "__main__":
 
         fif_path, events_csv_path = find_subject_files(subject_dir)
         logger.info(f"Extracting features for subject {subject_id}")
-        X, y, metadata = extract_features(fif_path, events_csv_path)
+        X, y, metadata = extract_features(fif_path, events_csv_path, subject_id)
         save_subject_features(subject_id, X, y, metadata)

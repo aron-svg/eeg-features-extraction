@@ -71,7 +71,7 @@ def extract_features_for_window(data, sfreq):
     return np.concatenate(blocks)
 
 
-def extract_features(fif_path, events_csv_path):
+def extract_features(fif_path, events_csv_path, subject_id):
     """
     Build (X, y, metadata) for one subject: sliding-window EEG features
     over each labeled stimulus trial, paired with its valence/arousal/
@@ -86,6 +86,7 @@ def extract_features(fif_path, events_csv_path):
 
     X, y = [], []
     metadata = {
+        "subject_id": [],
         "trial_index": [],
         "window_start": [],
         "window_end": [],
@@ -102,6 +103,7 @@ def extract_features(fif_path, events_csv_path):
 
             X.append(extract_features_for_window(data, sfreq))
             y.append([trial[col] for col in VAD_COLUMNS])
+            metadata["subject_id"].append(subject_id)
             metadata["trial_index"].append(trial_index)
             metadata["window_start"].append(start)
             metadata["window_end"].append(end)
