@@ -13,6 +13,15 @@ DATA_INPUT_DIR = os.path.join(DATA_DIR, "data", "input")
 DATA_OUTPUT_DIR = os.path.join(DATA_DIR, "data", "output")
 
 #######################################
+# Parallelism
+#######################################
+
+# Subjects are processed independently (one .fif + one .npz each), so this
+# parallelizes across subjects. os.cpu_count() can return None - fall back
+# to 1 in that case.
+N_WORKERS = os.cpu_count() or 1
+
+#######################################
 # Stimulus / labels matching
 #######################################
 

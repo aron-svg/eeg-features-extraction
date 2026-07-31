@@ -1,7 +1,7 @@
 [project]
-name = "template-origenesrd"
+name = "eeg-feature-extraction"
 version = "0.1.0"
-description = "Template for OrigenesRD repositories"
+description = "EEG feature extraction pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

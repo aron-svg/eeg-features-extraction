@@ -1,11 +1,12 @@
 import glob
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
 
 from logger_init import logger
-from config import DATA_INPUT_DIR, DATA_OUTPUT_DIR
+from config import DATA_INPUT_DIR, DATA_OUTPUT_DIR, N_WORKERS
 from features_tools.feature_extraction import extract_features
 
 
@@ -57,16 +58,37 @@ def save_subject_features(subject_id, X, y, metadata):
     )
 
 
+def process_subject(subject_id, subject_dir):
+    """
+    Extract and save features for one subject. Runs standalone in a worker
+    process - must stay top-level (picklable) and self-contained for
+    multiprocessing to be able to ship it to a subprocess.
+    """
+    fif_path, events_csv_path = find_subject_files(subject_dir)
+    logger.info(f"Extracting features for subject {subject_id}")
+    X, y, metadata = extract_features(fif_path, events_csv_path, subject_id)
+    save_subject_features(subject_id, X, y, metadata)
+    return subject_id
+
+
 if __name__ == "__main__":
     logger.info("Starting the main process")
     check_input_files(DATA_INPUT_DIR)
 
-    for subject_id in sorted(os.listdir(DATA_INPUT_DIR)):
-        subject_dir = os.path.join(DATA_INPUT_DIR, subject_id)
-        if not os.path.isdir(subject_dir):
-            continue
+    subject_dirs = {
+        subject_id: os.path.join(DATA_INPUT_DIR, subject_id)
+        for subject_id in sorted(os.listdir(DATA_INPUT_DIR))
+        if os.path.isdir(os.path.join(DATA_INPUT_DIR, subject_id))
+    }
 
-        fif_path, events_csv_path = find_subject_files(subject_dir)
-        logger.info(f"Extracting features for subject {subject_id}")
-        X, y, metadata = extract_features(fif_path, events_csv_path, subject_id)
-        save_subject_features(subject_id, X, y, metadata)
+    with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
+        futures = {
+            executor.submit(process_subject, subject_id, subject_dir): subject_id
+            for subject_id, subject_dir in subject_dirs.items()
+        }
+        for future in as_completed(futures):
+            subject_id = futures[future]
+            try:
+                future.result()
+            except Exception:
+                logger.exception(f"Failed to process subject {subject_id}")
