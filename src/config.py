@@ -34,6 +34,10 @@ ONSET_MATCH_TOLERANCE_SEC = 0.05
 WINDOW_LENGTH_SEC = 4.0
 WINDOW_STEP_SEC = 2.0
 
+# Skip this many seconds at the start of each trial before sliding the
+# first window, to avoid the initial transient response to stimulus onset.
+WINDOW_SKIP_SEC = 1.0
+
 #######################################
 # Channels
 #######################################

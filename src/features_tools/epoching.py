@@ -73,21 +73,35 @@ def match_stimulus_events(raw, events_csv_path):
     return trials
 
 
-def generate_sliding_windows(onset, duration, window_length, step):
+def generate_sliding_windows(onset, duration, window_length, step, skip=0.0):
     """
-    Fixed-length sliding windows (start, end) covering [onset, onset+duration],
-    stepping by `step`. Only full windows are kept (no partial tail window).
+    Fixed-length sliding windows (start, end) covering
+    [onset+skip, onset+duration], stepping by `step`. `skip` discards the
+    first seconds of the trial (e.g. to avoid the stimulus-onset transient).
+    If what's left after the skip is shorter than `window_length`, a single
+    window spanning the whole remaining period is returned instead of
+    dropping the trial.
     """
-    if duration < window_length:
+    start = onset + skip
+    end_limit = onset + duration
+
+    if end_limit <= start:
         logger.warning(
-            f"Trial at onset={onset:.3f}s has duration={duration:.3f}s "
-            f"shorter than window_length={window_length}s, skipping."
+            f"Trial at onset={onset:.3f}s has duration={duration:.3f}s, not "
+            f"even longer than skip={skip:.3f}s - no usable window."
         )
         return []
 
+    if end_limit - start < window_length:
+        logger.warning(
+            f"Trial at onset={onset:.3f}s has duration={duration:.3f}s "
+            f"(after skip={skip:.3f}s: {end_limit - start:.3f}s) shorter "
+            f"than window_length={window_length}s - using the full "
+            f"remaining period as a single (shorter) window."
+        )
+        return [(start, end_limit)]
+
     windows = []
-    start = onset
-    end_limit = onset + duration
     while start + window_length <= end_limit + 1e-9:
         windows.append((start, start + window_length))
         start += step

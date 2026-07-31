@@ -19,7 +19,16 @@ src/
 ├── main.py                      # Entry point: loops over data/input/<subject>/, extracts, saves .npz
 ├── features_tools/
 │   ├── epoching.py              # Matches .fif annotations <-> events.csv rows, builds sliding windows
-│   └── feature_extraction.py    # All feature extractors + dispatch
+│   ├── feature_extraction.py    # Orchestration only: dispatch + extract_features()
+│   └── features/                # One file per extractor (see feature catalog below)
+│       ├── spectral.py          # Shared Welch PSD / differential entropy helpers
+│       ├── band_power.py
+│       ├── differential_entropy.py
+│       ├── asymmetry.py         # differential_asymmetry (DASM) + rational_asymmetry (RASM)
+│       ├── band_ratios.py
+│       ├── spectral_entropy.py
+│       ├── hjorth.py
+│       └── peripheral_stats.py
 ├── logger_init.py / logging_config.py
 scripts/
 └── inspect_features.py          # Standalone viewer for the *_features.npz files (no pipeline import)
