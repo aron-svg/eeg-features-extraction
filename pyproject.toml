@@ -5,7 +5,7 @@ description = "EEG feature extraction pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "black>=25.1.0",
+    "black>=26.5.1",
     "flake8>=7.3.0",
     "git-lfs==1.6",
     "matplotlib>=3.10.9",
