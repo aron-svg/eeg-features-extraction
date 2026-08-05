@@ -2,8 +2,8 @@ name: Update README date
 
 on:
   schedule:
-    - cron: "0 6 * * *"  # daily at 06:00 UTC
-  workflow_dispatch:      # allow manual runs from the Actions tab
+    - cron: "0 6 * * *" # daily at 06:00 UTC
+  workflow_dispatch: # allow manual runs from the Actions tab
 
 permissions:
   contents: write
@@ -21,8 +21,8 @@ jobs:
 
       - name: Commit and push if changed
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "Aron"
+          git config user.email "aronsegoviamartinez@gmail.com"
           git add README.md
           if ! git diff --cached --quiet; then
             git commit -m "chore: update README date to $(date -u +%Y-%m-%d)"
