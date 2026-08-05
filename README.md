@@ -2,6 +2,8 @@
 
 Extraction pipeline that turns preprocessed EEG recordings (MNE `.fif`) into ML-ready feature arrays for predicting **valence / arousal / dominance (VAD)**.
 
+Last updated: 2026-08-05
+
 ## What it does
 
 For each subject folder in `data/input/`, the pipeline:
